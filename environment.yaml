@@ -372,7 +372,6 @@ dependencies:
     - tensorflow-io-gcs-filesystem==0.32.0
     - termcolor==2.3.0
     - terminado==0.17.1
-    - tiktoken==0.3.3
     - tinycss2==1.2.1
     - tokenizers==0.13.3
     - tomli==2.0.1
