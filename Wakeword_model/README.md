@@ -2,7 +2,7 @@ The definition and training process of the model are illustrated in [matron2017\
 
 The model architecture is following: 
 ```bash
-1D CRNN Keyword Spotting Model Architecture:
+1D CRNN Wakeword Spotting Model Architecture:
 
 -------------------------------------------------
 Input: (301, 48)
