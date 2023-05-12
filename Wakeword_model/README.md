@@ -5,7 +5,7 @@ The model architecture is following:
 1D CRNN Keyword Spotting Model Architecture:
 
 -------------------------------------------------
-Input: (keyword_data.shape[1], keyword_data.shape[2])
+Input: (301, 48)
 |
 |--- Conv1D (layer1): num_units=48, kernel_size=3, padding="same", activation="relu"
 |--- Dropout: dropout_ratio=0.3
