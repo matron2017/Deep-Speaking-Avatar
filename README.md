@@ -6,12 +6,12 @@ The Deep Speaking Avatar (DSA) is an conversational agent that combines four ess
 Although other version combinations might work, it is strongly recommended to use the listed versions. This project was developed and tested using the NVIDIA GTX Titan V 12 GB GPU. By default, due to the limited computational capability of the GTX Titan V GPU, this project employs TensorFlow with CPU support for wake-word detection.
 
 ## Getting Started
-Clone the repository and navigate to the project directory.
+Clone the repository and navigate to the project directory:
 ```bash
 git clone git@github.com:matron2017/Deep-Speaking-Avatar.git
 cd Deep-Speaking-Avatar
 ```
-Create a new conda environment from the conda file and install the pip dependencies.
+Create a new conda environment from the conda file and install the pip dependencies:
 ```bash
 conda env create --file environment.yaml
 conda activate avatar_env
