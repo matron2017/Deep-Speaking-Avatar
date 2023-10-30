@@ -389,4 +389,3 @@ dependencies:
     - wrapt==1.14.1
     - xxhash==3.2.0
     - yarl==1.9.2
-prefix: /media/simon/fc12aa1e-4538-454f-bcba-1c252de9621c/home/avatar/Avatar3/anaconda/envs/avatar_env
