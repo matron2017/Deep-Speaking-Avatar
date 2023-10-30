@@ -179,7 +179,7 @@ Starting the program usually takes from 1 to 2 minutes.
 6. The answer is then converted to speech using the `speech_synthesis` function.
 7. The loop repeats, waiting for the next wake word.
 
-To interact with the conversational avatar, simply say the wake word "Avatar" followed by your question. The avatar will then respond using speech synthesis. The process for the avatar's operation is as follows:
+To interact with the conversational avatar, simply say the wake word "Avatar" followed by your question. The avatar will then respond using speech synthesis. 
 
 ## Troubleshooting
 
