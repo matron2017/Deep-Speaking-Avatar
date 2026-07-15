@@ -1,201 +1,278 @@
-# The Deep Speaking Avatar (DSA)
+# Deep Speaking Avatar
 
-The Deep Speaking Avatar (DSA) is an conversational agent that combines four essential modules: wake-word recognition, speech-to-text, language model, and text-to-speech. This repository contains the source code, setup instructions, examples, and documentation to help you build, run, and customize the DSA.
+Deep Speaking Avatar (DSA) is a local voice assistant that combines wake-word detection, speech recognition, response generation, and speech synthesis.
 
-**The project requires Python 3.8.x, Linux Ubuntu 20.04, Nvidia Driver Version >=510.39.01, CUDA Version: 11.6, and cuDNN 8.3.2.**
-Although other version combinations might work, it is strongly recommended to use the listed versions. This project was developed and tested using the NVIDIA GTX Titan V 12 GB GPU. By default, due to the limited computational capability of the GTX Titan V GPU, this project employs TensorFlow with CPU support for wake-word detection.
+The assistant waits for the wake word **“Avatar”**, records a question, converts it to text, generates an answer, and reads the answer aloud.
 
-## Getting Started
-Clone the repository and navigate to the project directory:
+## System requirements
+
+The project was developed and tested with:
+
+- Ubuntu 20.04
+- Python 3.8
+- NVIDIA driver 510.39.01 or newer
+- CUDA 11.6
+- cuDNN 8.3.2
+- NVIDIA Titan V with 12 GB of GPU memory
+
+Other configurations may work but have not been tested. Wake-word detection runs on the CPU by default, leaving the GPU available for the other models.
+
+## Installation
+
+Clone the repository:
+
 ```bash
 git clone git@github.com:matron2017/Deep-Speaking-Avatar.git
 cd Deep-Speaking-Avatar
 ```
-Create a new conda environment from the conda file and install the pip dependencies:
+
+Create the Conda environment and install the Python dependencies:
+
 ```bash
 conda env create --file environment.yaml
 conda activate avatar_env
 pip install -r requirements.txt
 ```
-Install cuDNN 8.3.2 and PyTorch 1.13.1 with CUDA 11.6:
+
+Install cuDNN and the CUDA-enabled version of PyTorch:
+
 ```bash
 conda install -c conda-forge cudnn==8.3.2.44
-conda install pytorch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 pytorch-cuda=11.6 -c pytorch -c nvidia
+conda install pytorch==1.13.1 torchvision==0.14.1 \
+    torchaudio==0.13.1 pytorch-cuda=11.6 \
+    -c pytorch -c nvidia
 ```
 
+Several model files are too large to include in this repository. Install [Git LFS](https://git-lfs.com/) before downloading them:
 
-
-This project relies on several large model files that are not included in the GitHub repository due to their size. Before running the project, you must download these models. Detailed instructions for obtaining and setting up the required model files can be found in the `Modules` section. Make sure you have git-lfs installed (https://git-lfs.com) before going to the module section.
 ```bash
 git lfs install
 ```
- 
-## Modules
 
+## Models
 
-### 1. Speech-to-Text: Faster Whisper
+### 1. Speech recognition: Faster Whisper
 
-Faster Whisper is an optimized version of OpenAI's Whisper Small model, designed for automatic speech recognition (ASR) and speech translation tasks. The original model has been converted to the CTranslate2 format for improved inference speed.
+[Faster Whisper](https://github.com/guillaumekln/faster-whisper) transcribes recorded speech using a CTranslate2 version of the Whisper Small model.
 
-First you need to install [whisper](https://github.com/openai/whisper) and [faster-whisper](https://github.com/guillaumekln/faster-whisper) packages:
+Install Whisper and Faster Whisper:
 
 ```bash
 pip install -U openai-whisper
-pip install --force-reinstall "faster-whisper @ https://github.com/guillaumekln/faster-whisper/archive/refs/heads/master.tar.gz" && pip install --force-reinstall numpy==1.22
+pip install --force-reinstall \
+    "faster-whisper @ https://github.com/guillaumekln/faster-whisper/archive/refs/heads/master.tar.gz"
+pip install --force-reinstall numpy==1.22
 ```
-Clone the converted model from [guillaumekln/faster-whisper-small](https://huggingface.co/guillaumekln/faster-whisper-small) repository:
+
+Download the converted model:
+
 ```bash
 git clone https://huggingface.co/guillaumekln/faster-whisper-small small
 ```
 
-
-#### Example Usage
+#### Example
 
 ```python
-# Import the WhisperModel from the faster_whisper module
 from faster_whisper import WhisperModel
 
-# Specify the path where the pre-trained model is located
-small_model_path = ".../whisper-small-ct2"
+model_path = "small"
+recording_path = "audio_recording.wav"
 
-# Initialize the Faster Whisper model. Set the device to CPU and the compute type to int8.
-# These settings are suitable for low-compute devices or when GPU resources are limited.
-faster_whisper_model = WhisperModel(small_model_path, device="cpu", compute_type="int8")
+model = WhisperModel(
+    model_path,
+    device="cpu",
+    compute_type="int8",
+)
 
-# Alternatively, if you have a capable GPU, you can use it for faster computation.
-# Uncomment the following line to initialize the model with GPU support and float16 compute type.
-# faster_whisper_model = WhisperModel(small_model_path, device="cuda", compute_type="float16")
+# GPU alternative:
+# model = WhisperModel(
+#     model_path,
+#     device="cuda",
+#     compute_type="float16",
+# )
 
-# Specify the path to the audio recording file that you want to transcribe
-recording_path ='.../audio_recording.wav'
+segments, _ = model.transcribe(
+    recording_path,
+    language="en",
+    beam_size=5,
+)
 
-# The transcribe method returns a list of text segments (result_text_segments).
-result_text_segments, _ = faster_whisper_model.transcribe(recording_path, language="en", beam_size=5)
-
-# Join the text segments into a single string to get the complete transcription.
-result_text = ' '.join([segment.text for segment in result_text_segments])
+transcription = " ".join(segment.text for segment in segments)
+print(transcription)
 ```
 
+### 2. Response generation: RedPajama
 
+[RedPajama-INCITE-Chat-3B-v1](https://huggingface.co/togethercomputer/RedPajama-INCITE-Chat-3B-v1) generates a response from the transcribed question.
 
-### 2. Large Languge Model: RedPajama-INCITE-Chat-3B-v1
-
-The RedPajama model is a powerful large-scale language model designed for natural language understanding and generation tasks. It can generate human-like responses based on given prompts.
-
-Clone the RedPajama model [togethercomputer/RedPajama-INCITE-Chat-3B-v1](https://huggingface.co/togethercomputer/RedPajama-INCITE-Chat-3B-v1):
+Download the model:
 
 ```bash
-git clone https://huggingface.co/togethercomputer/RedPajama-INCITE-Chat-3B-v1
+git clone \
+    https://huggingface.co/togethercomputer/RedPajama-INCITE-Chat-3B-v1
 ```
 
-#### Example usage (with GPU):
+Running the model on a GPU requires approximately 8 GB of GPU memory.
 
-Ensure you have a 8GB GPU available to run the model on GPU.
+#### Example
+
 ```python
 import torch
-import transformers
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# Ensure the required version of the transformers library is installed
-MIN_TRANSFORMERS_VERSION = '4.25.1'
-assert transformers.__version__ >= MIN_TRANSFORMERS_VERSION, f'Please upgrade transformers to version {MIN_TRANSFORMERS_VERSION} or higher.'
+model_name = "togethercomputer/RedPajama-INCITE-Chat-3B-v1"
 
-# Load the tokenizer and the model from the pretrained RedPajama model
-Redpajama_tokenizer = AutoTokenizer.from_pretrained("togethercomputer/RedPajama-INCITE-Chat-3B-v1")
-Redpajama_model = AutoModelForCausalLM.from_pretrained("togethercomputer/RedPajama-INCITE-Chat-3B-v1", torch_dtype=torch.float16)
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForCausalLM.from_pretrained(
+    model_name,
+    torch_dtype=torch.float16,
+).to("cuda:0")
 
-# Move the model to GPU
-Redpajama_model = Redpajama_model.to('cuda:0')
-
-# Prepare the prompt for the model. The model expects a conversation-like input 
-#  where it alternates between a 'human' and a 'bot'.
 question = "What is the capital of France?"
 prompt = f"<human>: {question}\n<bot>:"
-inputs = Redpajama_tokenizer(prompt, return_tensors='pt').to(Redpajama_model.device)
+
+inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 input_length = inputs.input_ids.shape[1]
-outputs = Redpajama_model.generate(**inputs, max_new_tokens=45, do_sample=True, temperature=0.8, top_p=0.7, top_k=70, return_dict_in_generate=True)
-token = outputs.sequences[0, input_length:]
-# Decode the tokens to text
-text_answer = Redpajama_tokenizer.decode(token)
+
+with torch.inference_mode():
+    outputs = model.generate(
+        **inputs,
+        max_new_tokens=45,
+        do_sample=True,
+        temperature=0.8,
+        top_p=0.7,
+        top_k=70,
+    )
+
+generated_tokens = outputs[0, input_length:]
+answer = tokenizer.decode(
+    generated_tokens,
+    skip_special_tokens=True,
+)
+
+print(answer)
 ```
 
-### 3. Text-to-Speech (SpeechT5)
+### 3. Speech synthesis: SpeechT5
 
-The SpeechT5 model is a powerful text-to-speech model fine-tuned for speech synthesis on the LibriTTS dataset. Clone the model [microsoft/speecht5_tts](https://huggingface.co/microsoft/speecht5_tts):
+[SpeechT5](https://huggingface.co/microsoft/speecht5_tts) converts the generated answer into speech. A speaker embedding from the CMU ARCTIC dataset determines the output voice.
+
+Download the model:
 
 ```bash
 git clone https://huggingface.co/microsoft/speecht5_tts
 ```
-Lastly, you need to install `sounddevice` library with conda from this specific source to avoid audio problems with Ubuntu:
+
+Install `sounddevice` from the following Conda channel to avoid audio compatibility problems on Ubuntu:
 
 ```bash
 conda install -c "conda-forge/label/cf201901" python-sounddevice
 ```
 
-#### Example usage
+#### Example
 
 ```python
-from transformers import SpeechT5Processor, SpeechT5ForTextToSpeech, SpeechT5HifiGan
-from datasets import load_dataset
 import torch
+from datasets import load_dataset
+from transformers import (
+    SpeechT5ForTextToSpeech,
+    SpeechT5HifiGan,
+    SpeechT5Processor,
+)
 
-# Initialize the processor, model, and vocoder
-processor = SpeechT5Processor.from_pretrained("microsoft/speecht5_tts")
-model = SpeechT5ForTextToSpeech.from_pretrained("microsoft/speecht5_tts")
-vocoder = SpeechT5HifiGan.from_pretrained("microsoft/speecht5_hifigan")
+processor = SpeechT5Processor.from_pretrained(
+    "microsoft/speecht5_tts"
+)
+model = SpeechT5ForTextToSpeech.from_pretrained(
+    "microsoft/speecht5_tts"
+)
+vocoder = SpeechT5HifiGan.from_pretrained(
+    "microsoft/speecht5_hifigan"
+)
 
-# Load speaker embeddings from the CMU ARCTIC dataset
-embeddings_dataset = load_dataset("Matthijs/cmu-arctic-xvectors", split="validation")
-speaker_embeddings = torch.tensor(embeddings_dataset[7306]["xvector"]).unsqueeze(0)
+embeddings = load_dataset(
+    "Matthijs/cmu-arctic-xvectors",
+    split="validation",
+)
+speaker_embedding = torch.tensor(
+    embeddings[7306]["xvector"]
+).unsqueeze(0)
 
-# Process text input and generate speech audio
-inputs = processor(text="How are you doing today?", return_tensors="pt")
-speech_audio = model.generate_speech(inputs["input_ids"], speaker_embeddings, vocoder=vocoder)
+inputs = processor(
+    text="How are you doing today?",
+    return_tensors="pt",
+)
 
+speech_audio = model.generate_speech(
+    inputs["input_ids"],
+    speaker_embedding,
+    vocoder=vocoder,
+)
 ```
 
-## Running the Avatar
+## Running the assistant
 
-Activate the conda environment
+Activate the Conda environment:
+
 ```bash
 conda activate avatar_env
 ```
 
-Navigate to the project directory
+Open the project directory:
+
 ```bash
 cd /path/to/Deep-Speaking-Avatar
 ```
-Run the Avatar script
+
+Run the main script:
+
 ```bash
 python3 avatar4.py
 ```
-Starting the program usually takes from 1 to 2 minutes.
 
-1. The program begins an infinite loop.
-2. Wake word detection is performed, waiting for the user to say the wake word, which is "Avatar".
-3. Upon detecting the wake word, the program records a 5-second question from the user.
-4. The recorded question is transcribed using the `faster_whisper_model`.
-5. The transcribed question is passed to the `answer_question` function, which generates a response using the `Redpajama_tokenizer` and `Redpajama_model`.
-6. The answer is then converted to speech using the `speech_synthesis` function.
-7. The loop repeats, waiting for the next wake word.
+Initialisation usually takes one to two minutes. After loading the models, the program:
 
-To interact with the conversational avatar, simply say the wake word "Avatar" followed by your question. The avatar will then respond using speech synthesis. 
+1. Waits for the wake word **“Avatar”**.
+2. Records five seconds of audio.
+3. Transcribes the recording with Faster Whisper.
+4. Generates an answer with RedPajama.
+5. Converts the answer to speech with SpeechT5.
+6. Returns to wake-word detection.
+
+Say “Avatar” and then ask a question.
 
 ## Troubleshooting
 
-Repeatedly running the 'avatar4.py' script may sometimes cause a "CUDA out of memory error" or a torch error. This can be resolved by restarting the computer or clearing the GPU memory.
+### CUDA out-of-memory errors
 
-This project uses TensorFlow with CPU support due to the limited computational capability of the NVIDIA GTX Titan V GPU. If you want to use TensorFlow with GPU, you need to install it separately.
+Repeated runs may leave insufficient GPU memory available. Check GPU usage with:
+
 ```bash
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/
-mkdir -p $CONDA_PREFIX/etc/conda/activate.d
-echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/' > $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
+nvidia-smi
+```
+
+Close inactive Python processes that are still using the GPU. If the memory is not released, restart the computer before running the program again.
+
+### Optional TensorFlow GPU support
+
+Wake-word detection uses the CPU by default. TensorFlow GPU support can be installed separately:
+
+```bash
+export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/"
+
+mkdir -p "$CONDA_PREFIX/etc/conda/activate.d"
+
+echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib/' \
+    > "$CONDA_PREFIX/etc/conda/activate.d/env_vars.sh"
+
 pip install --upgrade pip
 python3 -m pip install tensorflow==2.9.3
 ```
 
-## Proposed Improvements
+## Possible improvements
 
-1. **Speech Synthesis Performance:**:  Implement alternative speech synthesis methods for faster response times. Another option is to upgrade the GPU for better processing speed.
-2. **Improved Large Language Model**: Incorporate more advanced large language models for increased accuracy in response generation.
-3. **Question Length Adaptability**: Include an automatic speech recognition model that adjusts the recorded question length based on detected voice activity, enhancing the system's flexibility.
+- Reduce speech-synthesis latency.
+- Replace RedPajama with a newer language model.
+- Use voice-activity detection instead of a fixed five-second recording.
+- Improve GPU memory management between models.
+- Allow the wake word and recording language to be configured.
