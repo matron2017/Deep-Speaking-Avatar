@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE and operating system
+.vscode/
+.idea/
+.DS_Store
+
+# Generated audio
+question_recording.wav
+speech_synthesis.wav
+
+# Downloaded models
+small/
+RedPajama-INCITE-Chat-3B-v1/
+speecht5_tts/
