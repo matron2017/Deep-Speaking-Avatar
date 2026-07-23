@@ -17,15 +17,36 @@ from num2words import num2words
 import sounddevice as sd
 
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+REDPAJAMA_MODEL_ID = "togethercomputer/RedPajama-INCITE-Chat-3B-v1"
+SPEECHT5_MODEL_ID = "microsoft/speecht5_tts"
+SPEECHT5_VOCODER_ID = "microsoft/speecht5_hifigan"
+EMBEDDINGS_DATASET_ID = "Matthijs/cmu-arctic-xvectors"
+EMBEDDINGS_SPLIT = "validation"
+SPEAKER_EMBEDDING_INDEX = 7306
+WHISPER_MODEL_PATH = os.path.join(BASE_DIR, "small")
+WAKE_WORD_MODEL_PATH = os.path.join(BASE_DIR, "Wakeword_model")
+RECORDING_PATH = os.path.join(BASE_DIR, "question_recording.wav")
+WHISPER_DEVICE = "cpu"
+WHISPER_COMPUTE_TYPE = "int8"
+REDPAJAMA_DEVICE = "cuda:0"
+MIN_TRANSFORMERS_VERSION = "4.25.1"
+SAMPLE_RATE = 16000
+AUDIO_CHANNELS = 1
+INITIAL_WAKE_WORD_RECORDING_DURATION = 3
+WAKE_WORD_CHUNK_DURATION = 1
+WAKE_WORD_THRESHOLD = 0.50
+QUESTION_RECORDING_DURATION = 5
+TRANSCRIPTION_LANGUAGE = "en"
+TRANSCRIPTION_BEAM_SIZE = 5
+FIRST_RESPONSE_PATH = "avatar_first_response.wav"
+SPEECH_OUTPUT_PATH = "speech_synthesis.wav"
 
 
 engine = inflect.engine()
 
 def detect_wake_word(wake_word_model):
-    fs = 16000  # Set the sample rate
-    seconds = 3  # Set the duration for the initial recording
-    channel = 1  # Set the number of channels for the recording
-    recording = sd.rec(int(seconds * fs), samplerate=fs, channels=channel)  # Record the initial audio
+    recording = sd.rec(int(INITIAL_WAKE_WORD_RECORDING_DURATION * SAMPLE_RATE), samplerate=SAMPLE_RATE, channels=AUDIO_CHANNELS)
     sd.wait()
     first_audio = np.squeeze(recording)  # Remove the unnecessary dimensions
 
@@ -33,7 +54,7 @@ def detect_wake_word(wake_word_model):
     print("Say Now: ")
     while True:
         # Record 1-second audio
-        recording = sd.rec(int(1 * fs), samplerate=fs, channels=channel)
+        recording = sd.rec(int(WAKE_WORD_CHUNK_DURATION * SAMPLE_RATE), samplerate=SAMPLE_RATE, channels=AUDIO_CHANNELS)
         sd.wait()
 
         audio = np.squeeze(recording)
@@ -42,15 +63,15 @@ def detect_wake_word(wake_word_model):
         long_audio = np.hstack((long_audio, audio))
 
         # Compute the mel spectrogram and normalize it
-        mel_spec = librosa.feature.melspectrogram(y=long_audio, sr=fs, n_fft=512, hop_length=160, n_mels=48, fmax=8000)
+        mel_spec = librosa.feature.melspectrogram(y=long_audio, sr=SAMPLE_RATE, n_fft=512, hop_length=160, n_mels=48, fmax=8000)
         mel_spec_db = librosa.power_to_db(mel_spec, ref=np.max).T
         mel_spec_db_norm = (mel_spec_db - np.min(mel_spec_db)) / (np.max(mel_spec_db) - np.min(mel_spec_db))
 
         # Predict using the wake word model
         prediction = wake_word_model.predict(np.expand_dims(mel_spec_db_norm, axis=0))
-        if prediction[:, 1] >= 0.50:
+        if prediction[:, 1] >= WAKE_WORD_THRESHOLD:
             # Play the audio response if the wake word is detected
-            pygame.mixer.music.load("avatar_first_response.wav")
+            pygame.mixer.music.load(FIRST_RESPONSE_PATH)
             pygame.mixer.music.play()
             while pygame.mixer.music.get_busy():
                 pygame.time.Clock().tick(10)  # Check every 10ms to avoid high CPU usage.
@@ -63,7 +84,7 @@ def record_question(recording_path, samplerate, duration):
     print("Recording question.....")
     #choice = input("Press 'r' to record 5 second audio clip or 'q' to exit \n")
     #if choice == 'r':
-    question_audio = sd.rec(int(samplerate * duration), samplerate=samplerate, channels=1)
+    question_audio = sd.rec(int(samplerate * duration), samplerate=samplerate, channels=AUDIO_CHANNELS)
     sd.wait()
     write(recording_path, samplerate, question_audio)
     return 
@@ -134,8 +155,8 @@ def speech_synthesis(answer, speaker_embeddings, synthesis_model, synthesis_proc
     speech = synthesis_model.generate_speech(inputs["input_ids"], speaker_embeddings, vocoder=synthesis_vocoder)
 
     # Save the generated speech to a file and play it
-    sf.write("speech_synthesis.wav", speech.numpy(), samplerate=16000)
-    pygame.mixer.music.load("speech_synthesis.wav")
+    sf.write(SPEECH_OUTPUT_PATH, speech.numpy(), samplerate=SAMPLE_RATE)
+    pygame.mixer.music.load(SPEECH_OUTPUT_PATH)
     pygame.mixer.music.play()
 
     # Wait for the audio to finish playing
@@ -153,36 +174,29 @@ def speech_synthesis(answer, speaker_embeddings, synthesis_model, synthesis_proc
 def main():
     torch.cuda.empty_cache()
     pygame.mixer.init()
-    MIN_TRANSFORMERS_VERSION = '4.25.1'
 
     # Check transformers version
     assert transformers.__version__ >= MIN_TRANSFORMERS_VERSION, f'Please upgrade transformers to version {MIN_TRANSFORMERS_VERSION} or higher.'
 
     # Initialize the RedPajama tokenizer and model
-    Redpajama_tokenizer = AutoTokenizer.from_pretrained("togethercomputer/RedPajama-INCITE-Chat-3B-v1")
-    Redpajama_model = AutoModelForCausalLM.from_pretrained("togethercomputer/RedPajama-INCITE-Chat-3B-v1", torch_dtype=torch.float16)
-    Redpajama_model = Redpajama_model.to('cuda:0')
+    Redpajama_tokenizer = AutoTokenizer.from_pretrained(REDPAJAMA_MODEL_ID)
+    Redpajama_model = AutoModelForCausalLM.from_pretrained(REDPAJAMA_MODEL_ID, torch_dtype=torch.float16)
+    Redpajama_model = Redpajama_model.to(REDPAJAMA_DEVICE)
 
     # Initialize the speech synthesis processor, model, and vocoder
-    synthesis_processor = SpeechT5Processor.from_pretrained("microsoft/speecht5_tts")
-    synthesis_model = SpeechT5ForTextToSpeech.from_pretrained("microsoft/speecht5_tts")
-    synthesis_vocoder = SpeechT5HifiGan.from_pretrained("microsoft/speecht5_hifigan")
+    synthesis_processor = SpeechT5Processor.from_pretrained(SPEECHT5_MODEL_ID)
+    synthesis_model = SpeechT5ForTextToSpeech.from_pretrained(SPEECHT5_MODEL_ID)
+    synthesis_vocoder = SpeechT5HifiGan.from_pretrained(SPEECHT5_VOCODER_ID)
 
     # Load xvector containing speaker's voice characteristics from a dataset
-    embeddings_dataset = load_dataset("Matthijs/cmu-arctic-xvectors", split="validation")
-    speaker_embeddings = torch.tensor(embeddings_dataset[7306]["xvector"]).unsqueeze(0)
+    embeddings_dataset = load_dataset(EMBEDDINGS_DATASET_ID, split=EMBEDDINGS_SPLIT)
+    speaker_embeddings = torch.tensor(embeddings_dataset[SPEAKER_EMBEDDING_INDEX]["xvector"]).unsqueeze(0)
 
     # Set the Faster Whisper model path and initialize the model
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    small_model_path = os.path.join(BASE_DIR, "small")
-    faster_whisper_model = WhisperModel(small_model_path, device="cpu", compute_type="int8")
+    faster_whisper_model = WhisperModel(WHISPER_MODEL_PATH, device=WHISPER_DEVICE, compute_type=WHISPER_COMPUTE_TYPE)
 
     # Load the wake word model
-    wake_word_model_path = os.path.join(BASE_DIR, "Wakeword_model")
-    wake_word_model = models.load_model(wake_word_model_path)
-
-    # Set the recording path
-    recording_path = os.path.join(BASE_DIR, "question_recording.wav")
+    wake_word_model = models.load_model(WAKE_WORD_MODEL_PATH)
 
     while True:
         # Wake word detection
@@ -190,10 +204,10 @@ def main():
         detect_wake_word(wake_word_model)
 
         # Recording question
-        record_question(recording_path, 16000, 5)
+        record_question(RECORDING_PATH, SAMPLE_RATE, QUESTION_RECORDING_DURATION)
 
         # Transcribing question
-        result_text_segments, _ = faster_whisper_model.transcribe(recording_path, language="en", beam_size=5)
+        result_text_segments, _ = faster_whisper_model.transcribe(RECORDING_PATH, language=TRANSCRIPTION_LANGUAGE, beam_size=TRANSCRIPTION_BEAM_SIZE)
         question = ' '.join([segment.text for segment in result_text_segments])
 
         # Answering question
