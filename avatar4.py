@@ -1,7 +1,6 @@
 import os
 from faster_whisper import WhisperModel
 import torch
-torch.cuda.empty_cache()
 from tensorflow.keras import models
 import librosa
 import numpy as np
@@ -20,49 +19,7 @@ import sounddevice as sd
 
 
 
-# Initialize the pygame mixer
-pygame.mixer.init()
-MIN_TRANSFORMERS_VERSION = '4.25.1'
-
-# Check transformers version
-assert transformers.__version__ >= MIN_TRANSFORMERS_VERSION, f'Please upgrade transformers to version {MIN_TRANSFORMERS_VERSION} or higher.'
-
-# Initialize the RedPajama tokenizer and model
-Redpajama_tokenizer = AutoTokenizer.from_pretrained("togethercomputer/RedPajama-INCITE-Chat-3B-v1")
-Redpajama_model = AutoModelForCausalLM.from_pretrained("togethercomputer/RedPajama-INCITE-Chat-3B-v1", torch_dtype=torch.float16)
-Redpajama_model = Redpajama_model.to('cuda:0')
-
-# Initialize the speech synthesis processor, model, and vocoder
-synthesis_processor = SpeechT5Processor.from_pretrained("microsoft/speecht5_tts")
-synthesis_model = SpeechT5ForTextToSpeech.from_pretrained("microsoft/speecht5_tts")
-synthesis_vocoder = SpeechT5HifiGan.from_pretrained("microsoft/speecht5_hifigan")
-
-# Load xvector containing speaker's voice characteristics from a dataset
-embeddings_dataset = load_dataset("Matthijs/cmu-arctic-xvectors", split="validation")
-speaker_embeddings = torch.tensor(embeddings_dataset[7306]["xvector"]).unsqueeze(0)
-
-# Set the Faster Whisper model path and initialize the model
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-small_model_path = os.path.join(BASE_DIR, "small")
-faster_whisper_model = WhisperModel(small_model_path, device="cpu", compute_type="int8")
-
-# Initialize the inflect engine
 engine = inflect.engine()
-
-# Load the wake word model
-wake_word_model_path = os.path.join(BASE_DIR, "Wakeword_model")
-wake_word_model = models.load_model(wake_word_model_path)
-
-# Set the recording path
-recording_path = os.path.join(BASE_DIR, "question_recording.wav")
-
-# Initialize the pygame mixer
-pygame.mixer.init()
-
-
-
-
-
 
 def detect_wake_word(wake_word_model):
     fs = 16000  # Set the sample rate
@@ -194,6 +151,39 @@ def speech_synthesis(answer, speaker_embeddings, synthesis_model, synthesis_proc
 
 
 def main():
+    torch.cuda.empty_cache()
+    pygame.mixer.init()
+    MIN_TRANSFORMERS_VERSION = '4.25.1'
+
+    # Check transformers version
+    assert transformers.__version__ >= MIN_TRANSFORMERS_VERSION, f'Please upgrade transformers to version {MIN_TRANSFORMERS_VERSION} or higher.'
+
+    # Initialize the RedPajama tokenizer and model
+    Redpajama_tokenizer = AutoTokenizer.from_pretrained("togethercomputer/RedPajama-INCITE-Chat-3B-v1")
+    Redpajama_model = AutoModelForCausalLM.from_pretrained("togethercomputer/RedPajama-INCITE-Chat-3B-v1", torch_dtype=torch.float16)
+    Redpajama_model = Redpajama_model.to('cuda:0')
+
+    # Initialize the speech synthesis processor, model, and vocoder
+    synthesis_processor = SpeechT5Processor.from_pretrained("microsoft/speecht5_tts")
+    synthesis_model = SpeechT5ForTextToSpeech.from_pretrained("microsoft/speecht5_tts")
+    synthesis_vocoder = SpeechT5HifiGan.from_pretrained("microsoft/speecht5_hifigan")
+
+    # Load xvector containing speaker's voice characteristics from a dataset
+    embeddings_dataset = load_dataset("Matthijs/cmu-arctic-xvectors", split="validation")
+    speaker_embeddings = torch.tensor(embeddings_dataset[7306]["xvector"]).unsqueeze(0)
+
+    # Set the Faster Whisper model path and initialize the model
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    small_model_path = os.path.join(BASE_DIR, "small")
+    faster_whisper_model = WhisperModel(small_model_path, device="cpu", compute_type="int8")
+
+    # Load the wake word model
+    wake_word_model_path = os.path.join(BASE_DIR, "Wakeword_model")
+    wake_word_model = models.load_model(wake_word_model_path)
+
+    # Set the recording path
+    recording_path = os.path.join(BASE_DIR, "question_recording.wav")
+
     while True:
         # Wake word detection
         torch.cuda.empty_cache()
@@ -212,4 +202,5 @@ def main():
         # Speech synthesis
         speech_synthesis(answer, speaker_embeddings, synthesis_model, synthesis_processor, synthesis_vocoder)
 
-main()
+if __name__ == "__main__":
+    main()
