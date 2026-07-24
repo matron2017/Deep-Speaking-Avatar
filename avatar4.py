@@ -11,10 +11,16 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, SpeechT5Processor,
 from datasets import load_dataset
 import soundfile as sf
 import inflect
-import re
 import pygame
 from num2words import num2words
 import sounddevice as sd
+from assistant_processing import (
+    clean_generated_response,
+    convert_number as convert_number_text,
+    normalize_mel_spectrogram,
+    remove_incomplete_sentences,
+    update_audio_window,
+)
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -59,13 +65,12 @@ def detect_wake_word(wake_word_model):
 
         audio = np.squeeze(recording)
         # Update the long_audio by removing the oldest second and appending the new second
-        long_audio = np.delete(long_audio, [index for index in range(int(np.shape(audio)[0]))])
-        long_audio = np.hstack((long_audio, audio))
+        long_audio = update_audio_window(long_audio, audio)
 
         # Compute the mel spectrogram and normalize it
         mel_spec = librosa.feature.melspectrogram(y=long_audio, sr=SAMPLE_RATE, n_fft=512, hop_length=160, n_mels=48, fmax=8000)
         mel_spec_db = librosa.power_to_db(mel_spec, ref=np.max).T
-        mel_spec_db_norm = (mel_spec_db - np.min(mel_spec_db)) / (np.max(mel_spec_db) - np.min(mel_spec_db))
+        mel_spec_db_norm = normalize_mel_spectrogram(mel_spec_db)
 
         # Predict using the wake word model
         prediction = wake_word_model.predict(np.expand_dims(mel_spec_db_norm, axis=0))
@@ -105,15 +110,7 @@ def answer_question(question, Redpajama_tokenizer, Redpajama_model):
     token = outputs.sequences[0, input_length:]
     output_str = Redpajama_tokenizer.decode(token)
 
-    # Clean up the output string
-    output_str = re.sub(r'<human>.*', '', output_str)
-    output_str = re.sub(r'<bot>.*', '', output_str)
-
-    # Convert numbers to words and remove incomplete sentences
-    converted_text = re.sub(r'\d+', convert_number, output_str)
-    cleaned_text = remove_incomplete_sentences(converted_text)
-
-    return cleaned_text
+    return clean_generated_response(output_str, convert_number)
 
 
 
@@ -122,25 +119,7 @@ def answer_question(question, Redpajama_tokenizer, Redpajama_model):
 
 
 def convert_number(match):
-    # Convert a number to its word form
-    number = int(match.group(0))
-    return engine.number_to_words(number)
-
-
-
-
-
-
-def remove_incomplete_sentences(text):
-    # Split the text into sentences
-    sentences = re.split(r'(?<=[.!?])\s+', text)
-
-    # Check if the last sentence ends with proper punctuation
-    if not re.search(r'[.!?]\s*$', sentences[-1]):
-        sentences.pop()
-
-    # Join the sentences back together
-    return ' '.join(sentences)
+    return convert_number_text(match, engine)
 
 
 
