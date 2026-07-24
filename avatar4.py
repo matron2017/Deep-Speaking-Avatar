@@ -5,14 +5,12 @@ from tensorflow.keras import models
 import librosa
 import numpy as np
 from scipy.io.wavfile import write
-import tools
 import transformers
 from transformers import AutoTokenizer, AutoModelForCausalLM, SpeechT5Processor, SpeechT5ForTextToSpeech, SpeechT5HifiGan
 from datasets import load_dataset
 import soundfile as sf
 import inflect
 import pygame
-from num2words import num2words
 import sounddevice as sd
 from assistant_processing import (
     clean_generated_response,
